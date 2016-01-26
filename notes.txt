@@ -1,0 +1,39 @@
+What does the lifecycle of racket look like?
+What's in the runtime?
+How are C functions called from racket code?
+How do I trace high level functions down to their roots?
+How do modules and languages work?
+How do I compile my changes?
+
+builtins
+fixnums (machine word with tags) in "pointer"
+flonums (floating point) boxed
+
+bignums (linked integers)
+rational (fractions (pair of integers))
+reals (everything not complex)
+complex (pair of reals)
+
+conservative collector (look it up)
+
+1. try examples in racket
+2. test suite
+3. c code / gambit implementation
+
+typing the numeric tower (paper)
+
+Curious about Hack to use the "math" package when it's available
+
+picobit bignum implementation
+
+bignum implementation
+8 bit artificial carry detection using fixnums
+
+racket number -> rkt number and vice versa
+
+multiply grade school algorithms
+Karatsuba algorithm?
+
+freenode racket IRC
+
+no reducing of fractions
