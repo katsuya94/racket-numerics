@@ -37,3 +37,24 @@ Karatsuba algorithm?
 freenode racket IRC
 
 no reducing of fractions
+
+put on github
+
+check out gambit fraction reducing?
+
+lots of predicates everything?
+sqrt
+expt
+
+split integers and fractions
+split complex and real
+split fixnum and bignum (artificial max?)
+
+two's complement bignums
+sign extension, highest byte all zeros or all ones
+
+fix err/rt-test
+
+for loops over list processing
+
+arity test lookup f

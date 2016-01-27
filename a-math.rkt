@@ -7,16 +7,13 @@
   racket/math
   racket/contract
   racket/vector
-  rackunit)
+  rackunit
+  "a-data.rkt"
+  "a-translate.rkt"
+  "a-util.rkt"
+  "a-constant.rkt")
 
-(provide a-lookup a->r r->a)
-
-(struct a-complex (real imag) #:transparent)
-(struct a-fraction (num den) #:transparent)
-(struct a-bignum (sign mag) #:transparent)
-
-(define a-real? (or/c flonum? a-fraction?))
-(define a-integer? (or/c a-bignum?))
+(provide a+ a- a*)
 
 (define/contract (byte/rest x) (-> (listof fixnum?) (values fixnum? (listof fixnum?)))
   (if (empty? x) (values 0 empty)
@@ -307,21 +304,8 @@
 
 (check-equal? (sub-complex (a-complex 32300.0 0.0) (a-complex 300.0 85.0)) (a-complex 32000.0 -85.0))
 
-(define/contract (integer->byte-list x) (-> exact-nonnegative-integer? (listof byte?))
-  (if (zero? x) empty
-      (let-values ([(q r) (quotient/remainder x 256)])
-        (cons r (integer->byte-list q)))))
-
-(check-equal? (integer->byte-list 32385) '(129 126))
-
-(define/contract (integer->a-integer x) (-> exact-integer? a-integer?)
-  (cond [else (a-bignum (sgn x) (apply bytes (integer->byte-list (abs x))))]))
-
-(check-equal? (integer->a-integer -32385) (a-bignum -1 (bytes 129 126)))
-
 (define/contract (a+ . args) (->* () #:rest (listof a-complex?) a-complex?)
-  (foldl add-complex (a-complex (a-fraction (integer->a-integer 0) (integer->a-integer 1))
-                                (a-fraction (integer->a-integer 0) (integer->a-integer 1))) args))
+  (foldl add-complex (a-complex a-zero a-zero) args))
 
 (check-equal? (a+ (a-complex 32085.0 0.0) (a-complex 0.0 300.0) (a-complex -85.0 0.0))
               (a-complex 32000.0 300.0))
@@ -388,8 +372,7 @@
 (check-equal? (mul-complex (a-complex 1.0 -1.0) (a-complex 1.0 1.0)) (a-complex 2.0 0.0))
 
 (define/contract (a* . args) (->* () #:rest (listof a-complex?) a-complex?)
-  (foldl mul-complex (a-complex (a-fraction (integer->a-integer 1) (integer->a-integer 1))
-                                (a-fraction (integer->a-integer 0) (integer->a-integer 1))) args))
+  (foldl mul-complex (a-complex a-one a-zero) args))
 
 (check-equal? (a* (a-complex 1.0 -1.0) (a-complex 1.0 1.0)) (a-complex 2.0 0.0))
 (check-equal? (a* (a-complex (a-fraction (a-bignum -1 (bytes 3)) (a-bignum 1 (bytes 2)))
@@ -398,59 +381,3 @@
                              (a-fraction (a-bignum 0 (bytes)) (a-bignum 1 (bytes 1)))))
               (a-complex (a-fraction (a-bignum -1 (bytes 24)) (a-bignum 1 (bytes 14)))
                          (a-fraction (a-bignum 0 (bytes)) (a-bignum 1 (bytes 2)))))
-
-(define/contract (a-integer->integer x) (-> a-integer? exact-integer?)
-  (cond [(a-bignum? x) (* (a-bignum-sign x)
-                          (for/sum ([b (in-bytes (a-bignum-mag x))]
-                                    [i (in-naturals)])
-                            (* b (expt 256 i))))]))
-
-(check-equal? (a-integer->integer (a-bignum -1 (bytes 129 126))) -32385)
-
-(define/contract (a-real->real x) (-> a-real? real?)
-  (cond [(flonum? x) x]
-        [(a-fraction? x) (/ (a-integer->integer (a-fraction-num x))
-                            (a-integer->integer (a-fraction-den x)))]))
-
-(check-equal? (a-real->real 32385.0) 32385.0)
-(check-equal? (a-real->real (a-fraction (a-bignum 1 (bytes 85)) (a-bignum 1 (bytes 3)))) 85/3)
-
-(define/contract (a->r x) (-> a-complex? complex?)
-  (make-rectangular (a-real->real (a-complex-real x)) (a-real->real (a-complex-imag x))))
-
-(check-equal? (a->r (a-complex 1.0 -3.0)) 1.0-3.0i)
-
-(define/contract (real->a-real x) (-> real? a-real?)
-  (cond [(flonum? x) x]
-        [(exact? x) (a-fraction (integer->a-integer (numerator x))
-                                (integer->a-integer (denominator x)))]))
-
-(check-equal? (real->a-real 32385.0) 32385.0)
-(check-equal? (real->a-real 85/3) (a-fraction (a-bignum 1 (bytes 85)) (a-bignum 1 (bytes 3))))
-
-(define/contract (r->a x) (-> complex? a-complex?)
-  (a-complex (real->a-real (real-part x)) (real->a-real (imag-part x))))
-
-(check-equal? (r->a 1.0-3.0i) (a-complex 1.0 -3.0))
-
-(define rkt-table
-  `((,+ . ,a+)
-    (,- . ,a-)
-    (,* . ,a*)))
-
-(define (a-lookup proc)
-  (let ([pair (assoc proc rkt-table)])
-    (if pair (cdr pair) #f)))
-
-(define-syntax-rule (test expected proc args ...)
-  (check-equal? (a->r (apply proc (map r->a (list args ...)))) expected))
-
-#|
-(test 3 a+ 1 1 1)
-(test 0.0 a+ 0 0.0)
-(test 9223372036854775807 a+ 9223372036854775807) 
-(test 4611686022722355199 a+ 4611686018427387903 4294967296)
-(test 4611686022722355199 a+ 4294967296 4611686018427387903)
-(test 9223372036854775806 a+ 4611686018427387903 4611686018427387903)
-(test 4611686018427387903 a+ 9223372036854775806 -4611686018427387903)
-|#

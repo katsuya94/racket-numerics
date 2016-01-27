@@ -1,6 +1,6 @@
 #lang racket
 
-(require "custom.rkt")
+(require "a-interface.rkt")
 
 (provide (all-defined-out))
 
@@ -245,6 +245,7 @@ transcript.
 (define arity-test
   (case-lambda
    [(f min max except)
+    (set! f (or (a-lookup f) f))
     (letrec ([aok?
 	      (lambda (a)
 		(cond
