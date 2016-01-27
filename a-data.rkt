@@ -10,7 +10,9 @@
          a-integer?
          a-exact?
          a-real?
-         a-number?)
+         a-number?
+         a-zero
+         a-one)
 
 (struct a-bignum (sign mag) #:transparent)
 (define a-integer? (or/c a-bignum?))
@@ -19,3 +21,6 @@
 (define a-real? (or/c flonum? a-exact?))
 (struct a-complex (real imag) #:transparent)
 (define a-number? (or/c a-real? a-complex?))
+
+(define a-zero (a-bignum 0 (bytes)))
+(define a-one (a-bignum 1 (bytes 1)))
