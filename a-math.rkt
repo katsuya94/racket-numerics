@@ -47,64 +47,140 @@
 
 (define/contract (a-real->flonum x) (-> a-real? flonum?)
   (cond [(flonum? x) x]
-        [(exact? x) (a-exact->flonum x)]))
+        [(a-exact? x) (a-exact->flonum x)]))
+
+; comparison
+
+(define/contract (less-bignum l r) (-> a-bignum? a-bignum? boolean?)
+  (fx< (compare-bignum l r) 0))
+(define/contract (less/equal-bignum l r) (-> a-bignum? a-bignum? boolean?)
+  (fx<= (compare-bignum l r) 0))
+(define/contract (equal-bignum l r) (-> a-bignum? a-bignum? boolean?)
+  (fx= (compare-bignum l r) 0))
+(define/contract (greater/equal-bignum l r) (-> a-bignum? a-bignum? boolean?)
+  (fx>= (compare-bignum l r) 0))
+(define/contract (greater-bignum l r) (-> a-bignum? a-bignum? boolean?)
+  (fx> (compare-bignum l r) 0))
+
+(define-syntax-rule (integer-comparison integer-op bignum-op)
+  (define/contract (integer-op l r) (-> a-integer? a-integer? boolean?)
+    (cond [else (bignum-op l r)])))
+
+(integer-comparison less-integer less-bignum)
+(integer-comparison less/equal-integer less/equal-bignum)
+(integer-comparison equal-integer equal-bignum)
+(integer-comparison greater/equal-integer greater/equal-bignum)
+(integer-comparison greater-integer greater-bignum)
+
+(define-syntax-rule (integer-fraction-comparison integer-fraction-op integer-op)
+  (define/contract (integer-fraction-op i f) (-> a-integer? a-fraction? boolean?)
+    (integer-op (mul-integer i (a-fraction-den f)) (a-fraction-num f))))
+
+(integer-fraction-comparison less-integer-fraction less-integer)
+(integer-fraction-comparison less/equal-integer-fraction less/equal-integer)
+(integer-fraction-comparison equal-integer-fraction equal-integer)
+(integer-fraction-comparison greater/equal-integer-fraction greater/equal-integer)
+(integer-fraction-comparison greater-integer-fraction greater-integer)
+
+(define-syntax-rule (fraction-comparison fraction-op integer-op)
+  (define/contract (fraction-op l r) (-> a-fraction? a-fraction? boolean?)
+    (integer-op (mul-integer (a-fraction-num l) (a-fraction-den r))
+                (mul-integer (a-fraction-num r) (a-fraction-den l)))))
+
+(fraction-comparison less-fraction less-integer)
+(fraction-comparison less/equal-fraction less/equal-integer)
+(fraction-comparison equal-fraction equal-integer)
+(fraction-comparison greater/equal-fraction greater/equal-integer)
+(fraction-comparison greater-fraction greater-integer)
+
+(define-syntax-rule (exact-comparison exact-op integer-op integer-fraction-op fraction-op)
+  (define/contract (exact-op l r) (-> a-exact? a-exact? boolean?)
+    (cond [(and (a-integer? l) (a-integer? r)) (integer-op l r)]
+          [(and (a-integer? l) (a-fraction? r)) (integer-fraction-op l r)]
+          [(and (a-fraction? l) (a-integer? r)) (integer-fraction-op r l)]
+          [(and (a-fraction? l) (a-fraction? r)) (fraction-op l r)])))
+
+(exact-comparison less-exact less-integer less-integer-fraction less-fraction)
+(exact-comparison less/equal-exact less/equal-integer less/equal-integer-fraction less/equal-fraction)
+(exact-comparison equal-exact equal-integer equal-integer-fraction equal-fraction)
+(exact-comparison greater/equal-exact greater/equal-integer greater/equal-integer-fraction
+                  greater/equal-fraction)
+(exact-comparison greater-exact greater-integer greater-integer-fraction greater-fraction)
+
+(define-syntax-rule (real-comparison real-op fl-op exact-op)
+  (define/contract (real-op l r) (-> a-real? a-real? boolean?)
+    (cond [(or (flonum? l) (flonum? r)) (fl-op (a-real->flonum l) (a-real->flonum r))]
+          [else (exact-op l r)])))
+
+(real-comparison less-real fl< less-exact)
+(real-comparison less/equal-real fl<= less/equal-exact)
+(real-comparison equal-real fl= equal-exact)
+(real-comparison greater/equal-real fl> greater/equal-exact)
+(real-comparison greater-real fl> greater-exact)
+
+; predicates
+
+(define/contract (exact-zero? x) (-> a-real? boolean?)
+  (and (a-integer? x) (equal-integer x a-zero)))
 
 ; fraction reduction
 
 (define/contract (a-fraction/reduce num den) (-> a-integer? a-integer? a-exact?)
-  (a-fraction num den))
+  (letrec ([r-num (a->r num)]
+           [r-den (a->r den)])
+    (r->a (/ r-num r-den))))
 
 ; mul
 
 (define/contract (mul-integer l r) (-> a-integer? a-integer? a-integer?)
   (cond [else (mul-bignum (a-integer->a-bignum l) (a-integer->a-bignum r))]))
 
-(define/contract (mul-fraction l r) (-> a-fraction? a-fraction? a-fraction?)
-  (a-fraction (mul-integer (a-fraction-num l) (a-fraction-num r))
-              (mul-integer (a-fraction-den l) (a-fraction-den r))))
+(define/contract (mul-fraction l r) (-> a-fraction? a-fraction? a-exact?)
+  (a-fraction/reduce (mul-integer (a-fraction-num l) (a-fraction-num r))
+                     (mul-integer (a-fraction-den l) (a-fraction-den r))))
 
-(define/contract (exactly-one? x) (-> a-real? boolean?)
-  (and (a-fraction? x)
-       (fx= (compare-bytes (bytes->list (a-bignum-mag (a-fraction-num x)))
-                           (bytes->list (a-bignum-mag (a-fraction-den x)))) 0)
-       (fx= (fx* (a-bignum-sign (a-fraction-num x))
-                 (a-bignum-sign (a-fraction-den x))) 1)))
+(define/contract (mul-integer-fraction i f) (-> a-integer? a-fraction? a-exact?)
+  (a-fraction/reduce (mul-integer i (a-fraction-num f)) (a-fraction-den f)))
 
-(define/contract (exactly-negative-one? x) (-> a-real? boolean?)
-  (and (a-fraction? x)
-       (fx= (compare-bytes (bytes->list (a-bignum-mag (a-fraction-num x)))
-                           (bytes->list (a-bignum-mag (a-fraction-den x)))) 0)
-       (fx= (fx* (a-bignum-sign (a-fraction-num x))
-                 (a-bignum-sign (a-fraction-den x))) -1)))
+(define/contract (mul-exact l r) (-> a-exact? a-exact? a-exact?)
+  (cond [(and (a-integer? l) (a-integer? r)) (mul-integer l r)]
+        [(and (a-integer? l) (a-fraction? r)) (mul-integer-fraction l r)]
+        [(and (a-fraction? l) (a-integer? r)) (mul-integer-fraction r l)]
+        [(and (a-fraction? l) (a-fraction? r)) (mul-fraction l r)]))
 
 (define/contract (mul-real l r) (-> a-real? a-real? a-real?)
-  (cond [(exactly-one? l) r]
-        [(exactly-one? r) l]
-        [(exactly-negative-one? l) (negate-real r)]
-        [(exactly-negative-one? r) (negate-real l)]
-        [(or (flonum? l) (flonum? r)) (fl* (a-real->flonum l) (a-real->flonum r))]
-        [else (mul-fraction l r)]))
+  (cond [(or (exact-zero? l) (exact-zero? r)) a-zero]
+        [(and (a-exact? l) (a-exact? r)) (mul-exact l r)]
+        [else (fl* (a-real->flonum l) (a-real->flonum r))]))
 
-(define/contract (mul-complex l r) (-> a-complex? a-complex? a-complex?)
-  (a-complex (add-real (mul-real (a-complex-real l) (a-complex-real r))
-                       (negate-real (mul-real (a-complex-imag l) (a-complex-imag r))))
-             (add-real (mul-real (a-complex-real l) (a-complex-imag r))
-                       (mul-real (a-complex-imag l) (a-complex-real r)))))
+(define/contract (mul-complex l r) (-> a-complex? a-complex? a-number?)
+  (let ([real (add-real (mul-real (a-complex-real l) (a-complex-real r))
+                        (negate-real (mul-real (a-complex-imag l) (a-complex-imag r))))]
+        [imag (add-real (mul-real (a-complex-real l) (a-complex-imag r))
+                        (mul-real (a-complex-imag l) (a-complex-real r)))])
+    (if (exact-zero? imag) real (a-complex real imag))))
+
+(define/contract (mul-real-complex r c) (-> a-real? a-complex? a-complex?)
+  (a-complex (mul-real r (a-complex-real c))
+             (mul-real r (a-complex-imag c))))
+
+(define/contract (mul-number l r) (-> a-number? a-number? a-number?)
+  (cond [(and (a-complex? l) (a-complex? r)) (mul-complex l r)]
+        [(and (a-real? l) (a-complex? r)) (mul-real-complex l r)]
+        [(and (a-complex? l) (a-real? r)) (mul-real-complex r l)]
+        [(and (a-real? l) (a-real? r)) (mul-real l r)]))
 
 ; add
 
 (define/contract (add-integer l r) (-> a-integer? a-integer? a-integer?)
   (cond [else (add-bignum (a-integer->a-bignum l) (a-integer->a-bignum r))]))
 
-(check-equal? (add-integer (a-bignum -1 (bytes 255)) (a-bignum 1 (bytes 128)))
-              (a-bignum -1 (bytes 127)))
-
 (define/contract (add-fraction l r) (-> a-fraction? a-fraction? a-exact?)
   (a-fraction/reduce (add-integer (mul-integer (a-fraction-num l) (a-fraction-den r))
                                   (mul-integer (a-fraction-num r) (a-fraction-den l)))
                      (mul-integer (a-fraction-den l) (a-fraction-den r))))
 
-(define/contract (add-integer-fraction i f) (-> a-integer? a-fraction?)
+(define/contract (add-integer-fraction i f) (-> a-integer? a-fraction? a-exact?)
   (a-fraction/reduce (add-integer (a-fraction-num f) (mul-integer i (a-fraction-den f)))
                      (a-fraction-den f)))
 
@@ -115,12 +191,15 @@
         [(and (a-integer? l) (a-integer? r)) (add-integer l r)]))
 
 (define/contract (add-real l r) (-> a-real? a-real? a-real?)
-  (cond [(or (flonum? l) (flonum? r)) (fl+ (a-real->flonum l) (a-real->flonum r))]
+  (cond [(exact-zero? l) r]
+        [(exact-zero? r) l]
+        [(or (flonum? l) (flonum? r)) (fl+ (a-real->flonum l) (a-real->flonum r))]
         [(and (a-exact? l) (a-exact? r)) (add-exact l r)]))
 
-(define/contract (add-complex l r) (-> a-complex? a-complex? a-complex?)
-  (a-complex (add-real (a-complex-real l) (a-complex-real r))
-             (add-real (a-complex-imag l) (a-complex-imag r))))
+(define/contract (add-complex l r) (-> a-complex? a-complex? a-number?)
+  (let ([real (add-real (a-complex-real l) (a-complex-real r))]
+        [imag (add-real (a-complex-imag l) (a-complex-imag r))])
+    (if (exact-zero? imag) real (a-complex real imag))))
 
 (define/contract (add-real-complex r c) (-> a-real? a-complex? a-complex?)
   (a-complex (add-real r (a-complex-real c))
@@ -135,17 +214,17 @@
 ; negate
 
 (define/contract (negate-integer x) (-> a-integer? a-integer?)
-  (cond [(a-bignum? x) (a-bignum (fx- (a-bignum-sign x)) (a-bignum-mag x))]))
+  (cond [(a-bignum? x) (a-bignum (fx* -1 (a-bignum-sign x)) (a-bignum-mag x))]))
 
 (define/contract (negate-fraction x) (-> a-fraction? a-fraction?)
   (a-fraction (negate-integer (a-fraction-num x)) (a-fraction-den x)))
 
 (define/contract (negate-exact x) (-> a-exact? a-exact?)
   (cond [(a-integer? x) (negate-integer x)]
-        [(a-fraction x) (negate-fraction x)]))
+        [(a-fraction? x) (negate-fraction x)]))
 
 (define/contract (negate-real x) (-> a-real? a-real?)
-  (cond [(flonum? x) (fl- x)]
+  (cond [(flonum? x) (fl* -1.0 x)]
         [(a-exact? x) (negate-exact x)]))
 
 (define/contract (negate-complex x) (-> a-complex? a-complex?)
@@ -157,7 +236,7 @@
 
 ; a+
 
-(define/contract (a+ . args) (->* () #:rest (listof a-number?) a-complex?)
+(define/contract (a+ . args) (->* () #:rest (listof a-number?) a-number?)
   (foldl add-number a-zero args))
 
 ; a-
@@ -167,5 +246,5 @@
 
 ; a*
 
-(define/contract (a* . args) (->* () #:rest (listof a-complex?) a-complex?)
-  (foldl mul-complex a-one args))
+(define/contract (a* . args) (->* () #:rest (listof a-number?) a-number?)
+  (foldl mul-number a-one args))

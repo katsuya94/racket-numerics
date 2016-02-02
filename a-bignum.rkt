@@ -7,7 +7,7 @@
          rackunit
          "a-data.rkt")
 
-(provide add-bignum mul-bignum compare-bytes)
+(provide add-bignum mul-bignum compare-bignum)
 
 (define/contract (byte/rest x) (-> (listof fixnum?) (values fixnum? (listof fixnum?)))
   (if (empty? x) (values 0 empty)
@@ -82,6 +82,19 @@
 (check-equal? (compare-bytes '(128) '(127)) 1)
 (check-equal? (compare-bytes '(255) '(0 1)) -1)
 (check-equal? (compare-bytes '(0 1) '(255)) 1)
+
+(define/contract (compare-bignum l r) (-> a-bignum? a-bignum? fixnum?)
+  (cond [(and (fx= (a-bignum-sign l) 0) (fx= (a-bignum-sign r) 0)) 0]
+        [(and (fx= (a-bignum-sign l) 1) (fx= (a-bignum-sign r) 0)) 1]
+        [(and (fx= (a-bignum-sign l) 0) (fx= (a-bignum-sign r) 1)) -1]
+        [(and (fx= (a-bignum-sign l) -1) (fx= (a-bignum-sign r) 0)) -1]
+        [(and (fx= (a-bignum-sign l) 0) (fx= (a-bignum-sign r) -1)) 1]
+        [(and (fx= (a-bignum-sign l) 1) (fx= (a-bignum-sign r) -1)) 1]
+        [(and (fx= (a-bignum-sign l) -1) (fx= (a-bignum-sign r) 1)) -1]
+        [(and (fx= (a-bignum-sign l) 1) (fx= (a-bignum-sign r) 1))
+         (compare-bytes (bytes->list (a-bignum-mag l)) (bytes->list (a-bignum-mag r)))]
+        [(and (fx= (a-bignum-sign l) -1) (fx= (a-bignum-sign r) -1))
+         (fx- (compare-bytes (bytes->list (a-bignum-mag l)) (bytes->list (a-bignum-mag r))))]))
 
 (define/contract (add-bytes l r) (-> bytes? bytes? bytes?)
   (apply bytes (add-bytes-carry (bytes->list l) (bytes->list r) 0)))

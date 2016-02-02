@@ -59,13 +59,22 @@
               (/ (a-integer->integer (integer->a-integer 85))
                  (a-integer->integer (integer->a-integer 3))))
 
+(define/contract (a-exact->exact x) (-> a-exact? exact?)
+  (cond [(a-fraction? x) (a-fraction->fraction x)]
+        [(a-integer? x) (a-integer->integer x)]))
+
+(check-equal? (a-exact->exact (fraction->a-fraction 85/3))
+              (a-fraction->fraction (fraction->a-fraction 85/3)))
+(check-equal? (a-exact->exact (integer->a-integer 85))
+              (a-integer->integer (integer->a-integer 85)))
+
 (define/contract (a-real->real x) (-> a-real? real?)
   (cond [(flonum? x) x]
-        [(a-fraction? x) (a-fraction->fraction x)]))
+        [(a-exact? x) (a-exact->exact x)]))
 
 (check-equal? (a-real->real 32385.0) 32385.0)
-(check-equal? (a-real->real (fraction->a-fraction 85/3))
-              (a-fraction->fraction (fraction->a-fraction 85/3)))
+(check-equal? (a-real->real (exact->a-exact 85/3))
+              (a-exact->exact (exact->a-exact 85/3)))
 
 (define/contract (a-complex->complex x) (-> a-complex? (and/c complex? (not/c real?)))
   (make-rectangular (a-real->real (a-complex-real x)) (a-real->real (a-complex-imag x))))
