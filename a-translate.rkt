@@ -25,6 +25,7 @@
 
 (define/contract (real->a-real x) (-> real? a-real?)
   (cond [(flonum? x) x]
+        [(single-flonum? x) (real->double-flonum x)]
         [(exact? x) (exact->a-exact x)]))
 
 (check-equal? (real->a-real 32385.0) 32385.0)
@@ -35,9 +36,10 @@
 
 (check-equal? (complex->a-complex 1.0-3.0i) (a-complex (real->a-real 1.0) (real->a-real -3.0)))
 
-(define/contract (r->a x) (-> number? a-number?)
+(define/contract (r->a x) (-> any/c any/c)
   (cond [(real? x) (real->a-real x)]
-        [(and/c complex? (not/c real?)) (complex->a-complex x)]))
+        [(and (complex? x) (not (real? x))) (complex->a-complex x)]
+        [else x]))
 
 (check-equal? (r->a 1.0-3.0i) (complex->a-complex 1.0-3.0i))
 (check-equal? (r->a 3.0) (real->a-real 3.0))
@@ -82,9 +84,10 @@
 (check-equal? (a-complex->complex (a-complex (real->a-real 1.0) (real->a-real -3.0)))
               (make-rectangular (a-real->real (real->a-real 1.0)) (a-real->real (real->a-real -3.0))))
 
-(define/contract (a->r x) (-> a-number? number?)
+(define/contract (a->r x) (-> any/c any/c)
   (cond [(a-real? x) (a-real->real x)]
-        [(a-complex? x) (a-complex->complex x)]))
+        [(a-complex? x) (a-complex->complex x)]
+        [else x]))
 
 (check-equal? (a->r (real->a-real 3.0)) (a-real->real (real->a-real 3.0)))
 (check-equal? (a->r (complex->a-complex 1.0-3.0i)) (a-complex->complex (complex->a-complex 1.0-3.0i)))
